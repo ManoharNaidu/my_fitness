@@ -1,0 +1,27 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'src/providers/fitness_provider.dart';
+import 'src/screens/home_shell_screen.dart';
+import 'src/theme/app_theme.dart';
+
+void main() {
+  runApp(const MyFitnessApp());
+}
+
+class MyFitnessApp extends StatelessWidget {
+  const MyFitnessApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => FitnessProvider()..seed(),
+      child: MaterialApp(
+        title: 'Strong Clone',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.darkTheme,
+        home: const HomeShellScreen(),
+      ),
+    );
+  }
+}
