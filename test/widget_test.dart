@@ -8,8 +8,17 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:my_fitness/main.dart';
+import 'package:my_fitness/src/config/app_config.dart';
 
 void main() {
+  setUp(() {
+    AppConfig.setEnableApiOverride(false);
+  });
+
+  tearDown(() {
+    AppConfig.setEnableApiOverride(null);
+  });
+
   testWidgets('App shell renders workout tab', (WidgetTester tester) async {
     await tester.pumpWidget(const MyFitnessApp());
     await tester.pumpAndSettle();

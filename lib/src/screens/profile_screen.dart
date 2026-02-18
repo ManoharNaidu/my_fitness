@@ -17,6 +17,17 @@ class ProfileScreen extends StatelessWidget {
             children: [
               const _ProfileHeader(),
               const SizedBox(height: 16),
+              if (fitness.apiEnabled)
+                Card(
+                  child: ListTile(
+                    title: const Text('Signed In As'),
+                    subtitle: Text(
+                      fitness.currentUser != null
+                          ? '${fitness.currentUser!.displayName} (${fitness.currentUser!.email})'
+                          : 'Unknown user',
+                    ),
+                  ),
+                ),
               Card(
                 child: ListTile(
                   title: const Text('Completed Workouts'),
@@ -68,6 +79,15 @@ class ProfileScreen extends StatelessWidget {
                     leading: const Icon(Icons.warning_amber_rounded),
                     title: const Text('Last Sync Error'),
                     subtitle: Text(fitness.lastSyncError!),
+                  ),
+                ),
+              if (fitness.apiEnabled)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: ElevatedButton.icon(
+                    onPressed: () => fitness.logout(),
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Logout'),
                   ),
                 ),
             ],

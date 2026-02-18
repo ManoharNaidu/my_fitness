@@ -3,7 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'platform_stub.dart' if (dart.library.io) 'platform_io.dart';
 
 class AppConfig {
+  static bool? _enableApiOverride;
+
+  static void setEnableApiOverride(bool? value) {
+    _enableApiOverride = value;
+  }
+
   static bool get enableApi =>
+      _enableApiOverride ??
       const bool.fromEnvironment('ENABLE_API', defaultValue: true);
 
   static String get apiBaseUrl {

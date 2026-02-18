@@ -23,7 +23,13 @@ class FitnessProvider extends ChangeNotifier {
   DateTime? _restUntil;
   Timer? _ticker;
   int? _activeSessionId;
+
   bool _apiEnabled = false;
+  bool _isAuthenticated = false;
+  bool _isBootstrapping = true;
+  bool _isAuthLoading = false;
+  ApiUser? _currentUser;
+  String? _authError;
   String? _lastSyncError;
 
   int restDurationSeconds = 90;
@@ -32,6 +38,11 @@ class FitnessProvider extends ChangeNotifier {
   List<WorkoutExercise> get activeExercises => _activeExercises;
   bool get hasActiveWorkout => _workoutStartedAt != null;
   bool get apiEnabled => _apiEnabled;
+  bool get isAuthenticated => _isAuthenticated;
+  bool get isBootstrapping => _isBootstrapping;
+  bool get isAuthLoading => _isAuthLoading;
+  ApiUser? get currentUser => _currentUser;
+  String? get authError => _authError;
   String? get lastSyncError => _lastSyncError;
 
   Duration get elapsedWorkoutDuration {
@@ -45,13 +56,142 @@ class FitnessProvider extends ChangeNotifier {
   }
 
   void seed() {
+    unawaited(initialize());
+  }
+
+  Future<void> initialize() async {
+    _isBootstrapping = true;
+
     if (AppConfig.enableApi) {
-      _seedMockData();
-      unawaited(_loadFromApi());
+      _apiEnabled = true;
+      _isAuthenticated = false;
+      _isAuthLoading = false;
+      _currentUser = null;
+      _authError = null;
+      _lastSyncError = null;
+      selectedTab = 0;
+      exercises = [];
+      templates = [];
+      history.clear();
+      restDurationSeconds = 90;
+      _isBootstrapping = false;
+      notifyListeners();
       return;
     }
 
+    _apiEnabled = false;
+    _isAuthenticated = true;
+    _isAuthLoading = false;
+    _currentUser = null;
+    _authError = null;
+    _lastSyncError = null;
+    selectedTab = 0;
     _seedMockData();
+    _isBootstrapping = false;
+    notifyListeners();
+  }
+
+  Future<bool> login({required String email, required String password}) async {
+    if (!_apiEnabled) return true;
+
+    _isAuthLoading = true;
+    _authError = null;
+    notifyListeners();
+
+    try {
+      final authResult = await _apiRepository.login(
+        email: email,
+        password: password,
+      );
+      _currentUser = authResult.user;
+      _isAuthenticated = true;
+      await _loadProtectedDataFromApi();
+      _isAuthLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _isAuthenticated = false;
+      _isAuthLoading = false;
+      _authError = e.toString();
+      exercises = [];
+      templates = [];
+      history.clear();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> register({
+    required String displayName,
+    required String email,
+    required String password,
+  }) async {
+    if (!_apiEnabled) return true;
+
+    _isAuthLoading = true;
+    _authError = null;
+    notifyListeners();
+
+    try {
+      final authResult = await _apiRepository.register(
+        displayName: displayName,
+        email: email,
+        password: password,
+      );
+      _currentUser = authResult.user;
+      _isAuthenticated = true;
+      await _loadProtectedDataFromApi();
+      _isAuthLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _isAuthenticated = false;
+      _isAuthLoading = false;
+      _authError = e.toString();
+      exercises = [];
+      templates = [];
+      history.clear();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> logout() async {
+    cancelWorkout(notify: false);
+    _apiRepository.logout();
+    _isAuthenticated = false;
+    _currentUser = null;
+    _authError = null;
+    _lastSyncError = null;
+    _activeSessionId = null;
+    selectedTab = 0;
+    exercises = [];
+    templates = [];
+    history.clear();
+    notifyListeners();
+  }
+
+  Future<void> _loadProtectedDataFromApi() async {
+    try {
+      final results = await Future.wait<dynamic>([
+        _apiRepository.fetchExercises(),
+        _apiRepository.fetchTemplates(),
+        _apiRepository.fetchHistory(),
+        _apiRepository.fetchCurrentUser(),
+      ]);
+
+      exercises = results[0] as List<Exercise>;
+      templates = results[1] as List<WorkoutTemplate>;
+      history
+        ..clear()
+        ..addAll(results[2] as List<WorkoutSession>);
+      _currentUser = results[3] as ApiUser;
+      restDurationSeconds = _currentUser?.defaultRestSeconds ?? 90;
+      _lastSyncError = null;
+      _authError = null;
+    } catch (e) {
+      _lastSyncError = e.toString();
+    }
   }
 
   void _seedMockData() {
@@ -86,34 +226,6 @@ class FitnessProvider extends ChangeNotifier {
         ),
       ),
     );
-
-    notifyListeners();
-  }
-
-  Future<void> _loadFromApi() async {
-    try {
-      await _apiRepository.authenticateDemo();
-      final results = await Future.wait<dynamic>([
-        _apiRepository.fetchExercises(),
-        _apiRepository.fetchTemplates(),
-        _apiRepository.fetchHistory(),
-        _apiRepository.fetchDefaultRestSeconds(),
-      ]);
-
-      exercises = results[0] as List<Exercise>;
-      templates = results[1] as List<WorkoutTemplate>;
-      history
-        ..clear()
-        ..addAll(results[2] as List<WorkoutSession>);
-      restDurationSeconds = results[3] as int;
-      _apiEnabled = true;
-      _lastSyncError = null;
-      notifyListeners();
-    } catch (e) {
-      _apiEnabled = false;
-      _lastSyncError = e.toString();
-      notifyListeners();
-    }
   }
 
   void changeTab(int index) {
@@ -126,6 +238,8 @@ class FitnessProvider extends ChangeNotifier {
   }
 
   void startWorkoutFromTemplate(String templateId) {
+    if (_apiEnabled && !_isAuthenticated) return;
+
     final template = templates.firstWhere((t) => t.id == templateId);
     _activeTemplate = template;
     _activeExercises = _cloneExercises(template.exercises, allCompleted: false);
@@ -142,6 +256,8 @@ class FitnessProvider extends ChangeNotifier {
   }
 
   void startEmptyWorkout() {
+    if (_apiEnabled && !_isAuthenticated) return;
+
     _activeTemplate = WorkoutTemplate(
       id: 'quick_${DateTime.now().millisecondsSinceEpoch}',
       name: 'Quick Workout',
@@ -234,7 +350,7 @@ class FitnessProvider extends ChangeNotifier {
 
   void setRestDuration(int seconds) {
     restDurationSeconds = seconds;
-    if (_apiEnabled) {
+    if (_apiEnabled && _isAuthenticated) {
       unawaited(_syncUserPreferencesOnApi());
     }
     notifyListeners();
@@ -243,7 +359,7 @@ class FitnessProvider extends ChangeNotifier {
   void finishWorkout() {
     if (!hasActiveWorkout) return;
 
-    if (_apiEnabled && _activeSessionId != null) {
+    if (_apiEnabled && _isAuthenticated && _activeSessionId != null) {
       unawaited(_finishSessionOnApi(_activeSessionId!));
       return;
     }
@@ -291,7 +407,12 @@ class FitnessProvider extends ChangeNotifier {
   }
 
   void _syncActiveSession() {
-    if (!_apiEnabled || _activeSessionId == null || !hasActiveWorkout) return;
+    if (!_apiEnabled ||
+        !_isAuthenticated ||
+        _activeSessionId == null ||
+        !hasActiveWorkout) {
+      return;
+    }
     unawaited(_syncActiveSessionOnApi());
   }
 
@@ -343,6 +464,15 @@ class FitnessProvider extends ChangeNotifier {
   Future<void> _syncUserPreferencesOnApi() async {
     try {
       await _apiRepository.updateDefaultRestSeconds(restDurationSeconds);
+      if (_currentUser != null) {
+        _currentUser = ApiUser(
+          id: _currentUser!.id,
+          email: _currentUser!.email,
+          displayName: _currentUser!.displayName,
+          units: _currentUser!.units,
+          defaultRestSeconds: restDurationSeconds,
+        );
+      }
       _lastSyncError = null;
       notifyListeners();
     } catch (e) {

@@ -5,6 +5,29 @@ import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 import '../models/fitness_models.dart';
 
+class ApiUser {
+  ApiUser({
+    required this.id,
+    required this.email,
+    required this.displayName,
+    required this.units,
+    required this.defaultRestSeconds,
+  });
+
+  final int id;
+  final String email;
+  final String displayName;
+  final String units;
+  final int defaultRestSeconds;
+}
+
+class AuthResult {
+  AuthResult({required this.accessToken, required this.user});
+
+  final String accessToken;
+  final ApiUser user;
+}
+
 class ApiFitnessRepository {
   ApiFitnessRepository({http.Client? client})
     : _client = client ?? http.Client();
@@ -12,22 +35,74 @@ class ApiFitnessRepository {
   final http.Client _client;
   String? _accessToken;
 
-  Future<void> authenticateDemo() async {
+  bool get isAuthenticated => _accessToken != null && _accessToken!.isNotEmpty;
+
+  Future<AuthResult> login({
+    required String email,
+    required String password,
+  }) async {
     final res = await _client.post(
       Uri.parse('${AppConfig.apiBaseUrl}/auth/login'),
       headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+
+    _ensureOk(res);
+    final data = _decodeMap(res.body);
+    final accessToken = data['access_token'] as String?;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw Exception('Login succeeded but no access token was returned.');
+    }
+
+    _accessToken = accessToken;
+    final user = _parseApiUser(data['user'] as Map<String, dynamic>?);
+    return AuthResult(accessToken: accessToken, user: user);
+  }
+
+  Future<AuthResult> register({
+    required String email,
+    required String password,
+    required String displayName,
+  }) async {
+    final res = await _client.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/auth/register'),
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'email': AppConfig.demoEmail,
-        'password': AppConfig.demoPassword,
+        'email': email,
+        'password': password,
+        'display_name': displayName,
       }),
     );
 
     _ensureOk(res);
     final data = _decodeMap(res.body);
-    _accessToken = data['access_token'] as String?;
-    if (_accessToken == null || _accessToken!.isEmpty) {
-      throw Exception('API login succeeded but no access token was returned.');
+    final accessToken = data['access_token'] as String?;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw Exception(
+        'Registration succeeded but no access token was returned.',
+      );
     }
+
+    _accessToken = accessToken;
+    final user = _parseApiUser(data['user'] as Map<String, dynamic>?);
+    return AuthResult(accessToken: accessToken, user: user);
+  }
+
+  Future<AuthResult> authenticateDemo() {
+    return login(email: AppConfig.demoEmail, password: AppConfig.demoPassword);
+  }
+
+  Future<ApiUser> fetchCurrentUser() async {
+    final res = await _client.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/users/me'),
+      headers: _authHeaders,
+    );
+    _ensureOk(res);
+    return _parseApiUser(_decodeMap(res.body));
+  }
+
+  void logout() {
+    _accessToken = null;
   }
 
   Future<int> fetchDefaultRestSeconds() async {
@@ -262,6 +337,21 @@ class ApiFitnessRepository {
     return SetType.values.firstWhere(
       (e) => e.name == raw,
       orElse: () => SetType.normal,
+    );
+  }
+
+  ApiUser _parseApiUser(Map<String, dynamic>? userMap) {
+    if (userMap == null) {
+      throw Exception('API did not return user details.');
+    }
+
+    return ApiUser(
+      id: (userMap['id'] as num?)?.toInt() ?? 0,
+      email: userMap['email'] as String? ?? '',
+      displayName: userMap['display_name'] as String? ?? 'User',
+      units: userMap['units'] as String? ?? 'kg',
+      defaultRestSeconds:
+          (userMap['default_rest_seconds'] as num?)?.toInt() ?? 90,
     );
   }
 }
