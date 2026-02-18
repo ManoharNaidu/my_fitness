@@ -18,7 +18,7 @@ class MyFitnessApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => FitnessProvider()..seed(),
       child: MaterialApp(
-        title: 'Strong Clone',
+        title: 'My Fitness',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.darkTheme,
         home: const _AppEntryScreen(),

@@ -19,6 +19,14 @@ class WorkoutScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Icon(
+                        Icons.local_fire_department_rounded,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     _QuickStartCard(
                       onStart: () {
                         fitness.startEmptyWorkout();
@@ -51,7 +59,7 @@ class WorkoutScreen extends StatelessWidget {
                       contentPadding: const EdgeInsets.all(14),
                       title: Text(template.name),
                       subtitle: Text('${template.exercises.length} exercises'),
-                      trailing: const Icon(Icons.play_arrow_rounded),
+                      trailing: const Icon(Icons.play_circle_fill_rounded),
                       onTap: () {
                         fitness.startWorkoutFromTemplate(template.id);
                         Navigator.of(context).push(_activeWorkoutRoute());

@@ -37,18 +37,21 @@ class HomeShellScreen extends StatelessWidget {
             onDestinationSelected: fitness.changeTab,
             destinations: const [
               NavigationDestination(
-                icon: Icon(Icons.fitness_center),
+                icon: Icon(Icons.sports_gymnastics_rounded),
                 label: 'Workout',
               ),
               NavigationDestination(
-                icon: Icon(Icons.bar_chart),
+                icon: Icon(Icons.insights_rounded),
                 label: 'History',
               ),
               NavigationDestination(
-                icon: Icon(Icons.menu_book),
+                icon: Icon(Icons.accessibility_new_rounded),
                 label: 'Exercises',
               ),
-              NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
+              NavigationDestination(
+                icon: Icon(Icons.account_circle_rounded),
+                label: 'Profile',
+              ),
             ],
           ),
           floatingActionButton: fitness.hasActiveWorkout
